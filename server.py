@@ -220,6 +220,60 @@ def get_company(company_name: str) -> str:
     return f"Company: {company['name']}"
 
 @mcp.tool()
+def get_pipeline_summary() -> str:
+    """Get a summary of the current pipeline."""
+
+    if not SUPABASE_URL or not SUPABASE_API_KEY:
+        return "Missing SUPABASE_URL or SUPABASE_API_KEY in .env."
+
+    params = {
+        "select": "stage,deal_value",
+    }
+
+    response = httpx.get(
+        f"{REST_BASE_URL}/companies",
+        headers=HEADERS,
+        params=params,
+        timeout=20.0,
+    )
+    response.raise_for_status()
+
+    rows = response.json()
+
+    if not rows:
+        return "No companies found in the pipeline."
+
+    stage_counts = {stage: 0 for stage in VALID_STAGES}
+    active_deal_count = 0
+    total_value_in_flight = 0.0
+
+    for row in rows:
+        stage = (row.get("stage") or "new").strip().lower()
+        if stage in stage_counts:
+            stage_counts[stage] += 1
+
+        if stage not in ["won", "lost"]:
+            active_deal_count += 1
+
+            deal_value = row.get("deal_value")
+            if deal_value is not None:
+                total_value_in_flight += float(deal_value)
+
+    lines = [
+        "Pipeline summary:",
+        f"- Total companies: {len(rows)}",
+        f"- Active deals: {active_deal_count}",
+        f"- Total value in flight: {total_value_in_flight:.2f}",
+        "- Stage counts:",
+    ]
+
+    for stage in VALID_STAGES:
+        lines.append(f"  - {stage}: {stage_counts[stage]}")
+
+    return "\n".join(lines)
+
+    
+@mcp.tool()
 def update_pipeline_stage(company_name: str, stage: str) -> str:
     """Update the pipeline stage for a named company."""
 
