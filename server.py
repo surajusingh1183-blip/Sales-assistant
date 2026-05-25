@@ -103,11 +103,12 @@ def log_activity(
     return f"Logged {activity_type} for {company['name']} at {happened_at}."
 
 @mcp.tool()
-def create_company(name: str, industry: str = "") -> str:
+def create_company(name: str, industry: str = "", deal_value: str = "") -> str:
     """Create a new company record in Supabase."""
 
     name = name.strip()
     industry = industry.strip()
+    deal_value = deal_value.strip()
 
     if not name:
         return "Company name is required."
@@ -115,9 +116,20 @@ def create_company(name: str, industry: str = "") -> str:
     if not SUPABASE_URL or not SUPABASE_API_KEY:
         return "Missing SUPABASE_URL or SUPABASE_API_KEY in .env."
 
+    parsed_deal_value = None
+    if deal_value:
+        try:
+            parsed_deal_value = float(deal_value)
+        except ValueError:
+            return "Deal value must be a valid number."
+
+        if parsed_deal_value < 0:
+            return "Deal value cannot be negative."
+
     payload = {
         "name": name,
         "industry": industry or None,
+        "deal_value": parsed_deal_value,
     }
 
     response = httpx.post(
@@ -131,6 +143,9 @@ def create_company(name: str, industry: str = "") -> str:
         return f"Company '{name}' already exists."
 
     response.raise_for_status()
+
+    if parsed_deal_value is not None:
+        return f"Created company '{name}' with deal value {parsed_deal_value}."
 
     return f"Created company '{name}'."
 
