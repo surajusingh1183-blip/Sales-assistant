@@ -272,7 +272,54 @@ def get_pipeline_summary() -> str:
 
     return "\n".join(lines)
 
-    
+
+@mcp.tool()
+def add_contact(
+    company_name: str,
+    contact_name: str,
+    email: str = "",
+    phone: str = "",
+    role: str = "",
+) -> str:
+    """Add a contact to a named company."""
+
+    company_name = company_name.strip()
+    contact_name = contact_name.strip()
+    email = email.strip()
+    phone = phone.strip()
+    role = role.strip()
+
+    if not company_name:
+        return "Company name is required."
+
+    if not contact_name:
+        return "Contact name is required."
+
+    if not SUPABASE_URL or not SUPABASE_API_KEY:
+        return "Missing SUPABASE_URL or SUPABASE_API_KEY in .env."
+
+    company = get_company_by_name(company_name)
+    if not company:
+        return f"Company '{company_name}' was not found. Create it first."
+
+    payload = {
+        "company_id": company["id"],
+        "name": contact_name,
+        "email": email or None,
+        "phone": phone or None,
+        "role": role or None,
+    }
+
+    response = httpx.post(
+        f"{REST_BASE_URL}/contacts",
+        headers=HEADERS,
+        json=payload,
+        timeout=20.0,
+    )
+    response.raise_for_status()
+
+    return f"Added contact '{contact_name}' to {company['name']}."
+
 @mcp.tool()
 def update_pipeline_stage(company_name: str, stage: str) -> str:
     """Update the pipeline stage for a named company."""
