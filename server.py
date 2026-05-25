@@ -371,6 +371,86 @@ def get_contact(contact_name: str) -> str:
     return "\n".join(lines)
 
 @mcp.tool()
+def get_overdue_deals(days_overdue: int = 14) -> str:
+    """Get active deals with no recent activity."""
+
+    if days_overdue < 1:
+        return "days_overdue must be at least 1."
+
+    if not SUPABASE_URL or not SUPABASE_API_KEY:
+        return "Missing SUPABASE_URL or SUPABASE_API_KEY in .env."
+
+    company_params = {
+        "select": "id,name,stage",
+    }
+
+    company_response = httpx.get(
+        f"{REST_BASE_URL}/companies",
+        headers=HEADERS,
+        params=company_params,
+        timeout=20.0,
+    )
+    company_response.raise_for_status()
+
+    companies = company_response.json()
+    if not companies:
+        return "No companies found."
+
+    now_utc = datetime.now(timezone.utc)
+    overdue_lines = []
+
+    for company in companies:
+        stage = (company.get("stage") or "new").strip().lower()
+
+        if stage in ["won", "lost"]:
+            continue
+
+        activity_params = {
+            "company_id": f"eq.{company['id']}",
+            "select": "happened_at",
+            "order": "happened_at.desc",
+            "limit": "1",
+        }
+
+        activity_response = httpx.get(
+            f"{REST_BASE_URL}/activity_log",
+            headers=HEADERS,
+            params=activity_params,
+            timeout=20.0,
+        )
+        activity_response.raise_for_status()
+
+        activity_rows = activity_response.json()
+
+        if not activity_rows:
+            overdue_lines.append(
+                f"- {company['name']} ({stage}) — no activity logged yet"
+            )
+            continue
+
+        happened_at = activity_rows[0].get("happened_at")
+        if not happened_at:
+            overdue_lines.append(
+                f"- {company['name']} ({stage}) — no valid activity date found"
+            )
+            continue
+
+        last_activity = datetime.fromisoformat(happened_at.replace("Z", "+00:00"))
+        days_since = (now_utc - last_activity).days
+
+        if days_since >= days_overdue:
+            overdue_lines.append(
+                f"- {company['name']} ({stage}) — last activity {days_since} days ago"
+            )
+
+    if not overdue_lines:
+        return f"No overdue deals found for the last {days_overdue} days."
+
+    lines = [f"Overdue deals ({days_overdue}+ days since last activity):"]
+    lines.extend(overdue_lines)
+    return "\n".join(lines)
+
+@mcp.tool()
 def update_pipeline_stage(company_name: str, stage: str) -> str:
     """Update the pipeline stage for a named company."""
 
