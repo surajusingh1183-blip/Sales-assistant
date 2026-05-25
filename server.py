@@ -321,6 +321,56 @@ def add_contact(
     return f"Added contact '{contact_name}' to {company['name']}."
 
 @mcp.tool()
+def get_contact(contact_name: str) -> str:
+    """Get a contact record by name."""
+
+    contact_name = contact_name.strip()
+
+    if not contact_name:
+        return "Contact name is required."
+
+    if not SUPABASE_URL or not SUPABASE_API_KEY:
+        return "Missing SUPABASE_URL or SUPABASE_API_KEY in .env."
+
+    params = {
+        "name": f"eq.{contact_name}",
+        "select": "name,email,phone,role,companies(name)",
+        "limit": "1",
+    }
+
+    response = httpx.get(
+        f"{REST_BASE_URL}/contacts",
+        headers=HEADERS,
+        params=params,
+        timeout=20.0,
+    )
+    response.raise_for_status()
+
+    rows = response.json()
+    if not rows:
+        return f"Contact '{contact_name}' was not found."
+
+    contact = rows[0]
+    company = contact.get("companies")
+    company_name = company.get("name") if company else "Unknown"
+
+    lines = [
+        f"Contact: {contact['name']}",
+        f"Company: {company_name}",
+    ]
+
+    if contact.get("role"):
+        lines.append(f"Role: {contact['role']}")
+
+    if contact.get("email"):
+        lines.append(f"Email: {contact['email']}")
+
+    if contact.get("phone"):
+        lines.append(f"Phone: {contact['phone']}")
+
+    return "\n".join(lines)
+
+@mcp.tool()
 def update_pipeline_stage(company_name: str, stage: str) -> str:
     """Update the pipeline stage for a named company."""
 
